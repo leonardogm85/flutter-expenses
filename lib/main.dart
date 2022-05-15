@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:expenses/components/chart.dart';
 import 'package:expenses/components/transaction_form.dart';
 import 'package:expenses/components/transaction_list.dart';
 import 'package:expenses/models/transaction.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 main() => runApp(const ExpensesApp());
@@ -34,6 +36,10 @@ class ExpensesApp extends StatelessWidget {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
+              button: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
       ),
     );
@@ -48,38 +54,9 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final List<Transaction> _transactions = [
-    // Transaction(
-    //   id: 't0',
-    //   title: 'Conta de Água',
-    //   value: 400,
-    //   date: DateTime.now().subtract(const Duration(days: 0)),
-    // ),
-    // Transaction(
-    //   id: 't1',
-    //   title: 'Novo Tênis de Corrida',
-    //   value: 310.76,
-    //   date: DateTime.now().subtract(const Duration(days: 1)),
-    // ),
-    // Transaction(
-    //   id: 't2',
-    //   title: 'Conta de Luz',
-    //   value: 211.30,
-    //   date: DateTime.now().subtract(const Duration(days: 2)),
-    // ),
-    // Transaction(
-    //   id: 't3',
-    //   title: 'Conta de Internet',
-    //   value: 211.30,
-    //   date: DateTime.now().subtract(const Duration(days: 3)),
-    // ),
-    // Transaction(
-    //   id: 't4',
-    //   title: 'Novo Livro',
-    //   value: 1000,
-    //   date: DateTime.now().subtract(const Duration(days: 4)),
-    // ),
-  ];
+  final List<Transaction> _transactions = [];
+
+  bool showChart = false;
 
   List<Transaction> get _recentTransactions {
     return _transactions.where((transaction) {
@@ -125,37 +102,106 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  Widget _getIconButton(IconData icon, void Function() function) {
+    return Platform.isIOS
+        ? GestureDetector(
+            onTap: function,
+            child: Icon(icon),
+          )
+        : IconButton(
+            onPressed: function,
+            icon: Icon(icon),
+          );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Despesas Pessoais'),
-        actions: [
-          IconButton(
-            onPressed: () => _openTransactionFormModal(context),
-            icon: const Icon(Icons.add),
-          ),
-        ],
+    final MediaQueryData mediaQuery = MediaQuery.of(context);
+
+    final bool isLandscape = mediaQuery.orientation == Orientation.landscape;
+
+    final IconData iconList =
+        Platform.isIOS ? CupertinoIcons.refresh : Icons.list;
+    final IconData iconChart =
+        Platform.isIOS ? CupertinoIcons.refresh : Icons.pie_chart;
+
+    final List<Widget> actions = [
+      if (isLandscape)
+        _getIconButton(
+          showChart ? iconList : iconChart,
+          () {
+            setState(() {
+              showChart = !showChart;
+            });
+          },
+        ),
+      _getIconButton(
+        Platform.isIOS ? CupertinoIcons.add : Icons.add,
+        () => _openTransactionFormModal(context),
       ),
-      body: SingleChildScrollView(
+    ];
+
+    final Widget appBar = Platform.isIOS
+        ? CupertinoNavigationBar(
+            middle: const Text('Despesas Pessoais'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: actions,
+            ),
+          )
+        : AppBar(
+            title: const Text('Despesas Pessoais'),
+            actions: actions,
+            backgroundColor: Theme.of(context).primaryColor,
+          );
+
+    final double appBarPreferredSizeHeight = Platform.isIOS
+        ? (appBar as ObstructingPreferredSizeWidget).preferredSize.height
+        : (appBar as PreferredSizeWidget).preferredSize.height;
+
+    final double availableHeight = mediaQuery.size.height -
+        appBarPreferredSizeHeight -
+        mediaQuery.padding.top;
+
+    final Widget body = SafeArea(
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Chart(
-              recentTransactions: _recentTransactions,
-            ),
-            TransactionList(
-              transactions: _transactions,
-              onRemove: _removeTransaction,
-            ),
+            if (showChart || !isLandscape)
+              SizedBox(
+                height: availableHeight * (isLandscape ? 0.8 : 0.3),
+                child: Chart(
+                  recentTransactions: _recentTransactions,
+                ),
+              ),
+            if (!showChart || !isLandscape)
+              SizedBox(
+                height: availableHeight * (isLandscape ? 1 : 0.7),
+                child: TransactionList(
+                  transactions: _transactions,
+                  onRemove: _removeTransaction,
+                ),
+              ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () => _openTransactionFormModal(context),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
+
+    return Platform.isIOS
+        ? CupertinoPageScaffold(
+            navigationBar: appBar as ObstructingPreferredSizeWidget,
+            child: body,
+          )
+        : Scaffold(
+            appBar: appBar as PreferredSizeWidget,
+            body: body,
+            floatingActionButton: FloatingActionButton(
+              child: const Icon(Icons.add),
+              onPressed: () => _openTransactionFormModal(context),
+            ),
+            floatingActionButtonLocation:
+                FloatingActionButtonLocation.centerFloat,
+          );
   }
 }
